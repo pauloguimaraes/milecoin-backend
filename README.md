@@ -12,7 +12,13 @@ npm install
 npm start
 ```
 
-##### Get blockchain
+## Executando o projeto
+
+Existem algumas operações básicas principais que podem ser feitas nessa implementação de blockchain. Mas antes de nos atermos a elas é necessário ter em mente que:
+
+1. Cada nó da rede (instância desse projeto executando) irá possuir seu endereço e todas as transações enviadas para esse nó sairão do saldo desse endereço.
+
+#### Get blockchain
 ```
 curl http://localhost:3001/blocks
 ```
