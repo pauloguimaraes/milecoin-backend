@@ -1,96 +1,130 @@
+/*
+ * -----------------
+ * -- Importações --
+ * -----------------
+ */
+
+
 import * as  bodyParser from 'body-parser';
 import * as express from 'express';
 import * as _ from 'lodash';
-import {
-    Block, generateNextBlock, generatenextBlockWithTransaction, generateRawNextBlock, getAccountBalance,
-    getBlockchain, getMyUnspentTransactionOutputs, getUnspentTxOuts, sendTransaction
-} from './blockchain';
-import {connectToPeers, getSockets, initP2PServer} from './p2p';
-import {UnspentTxOut} from './transaction';
-import {getTransactionPool} from './transactionPool';
-import {getPublicFromWallet, initWallet} from './wallet';
+import { Bloco, gera_proximo_bloco, gera_proximo_bloco_com_transacao, gera_proximo_bloco_raw, get_saldo_carteira, get_blockchain, get_transacoes_nao_processadas_da_carteira, get_corpos_nao_processados, envia_transacao } from './blockchain';
+import { conecta_aos_peers, get_sockets, inicia_servidor_p2p } from './p2p';
+import { CorposNaoProcessados } from './transaction';
+import { get_pool_transacoes } from './transactionPool';
+import { get_chave_publica_carteira, inicia_carteira } from './wallet';
+
+
+
+/*
+ * ---------------
+ * -- Variáveis --
+ * ---------------
+ */
+
 
 const httpPort: number = parseInt(process.env.HTTP_PORT) || 3001;
 const p2pPort: number = parseInt(process.env.P2P_PORT) || 6001;
 
-const initHttpServer = (myHttpPort: number) => {
+
+
+/*
+ * -------------
+ * -- Funções --
+ * -------------
+ */
+
+
+/**
+ * Inicia o servidor na porta informada.
+ * @param porta Porta que receberá as conexões
+ */
+const inicia_servidor_http = (porta: number) => {
     const app = express();
     app.use(bodyParser.json());
 
     app.use((err, req, res, next) => {
-        if (err) {
+        if (err)
             res.status(400).send(err.message);
-        }
     });
 
-    app.get('/blocks', (req, res) => {
-        res.send(getBlockchain());
+    // GET blockchain
+    app.get('/blocos', (req, res) => {
+        res.send(get_blockchain());
     });
 
+    // GET informações de um bloco específico
     app.get('/block/:hash', (req, res) => {
-        const block = _.find(getBlockchain(), {'hash' : req.params.hash});
+        const block = _.find(get_blockchain(), {'hash' : req.params.hash});
         res.send(block);
     });
 
-    app.get('/transaction/:id', (req, res) => {
-        const tx = _(getBlockchain())
-            .map((blocks) => blocks.data)
+    // GET informações da transação
+    app.get('/transacao/:id', (req, res) => {
+        const tx = _(get_blockchain())
+            .map((blocks) => {
+                return blocks.dados;
+            })
             .flatten()
             .find({'id': req.params.id});
         res.send(tx);
     });
 
-    app.get('/address/:address', (req, res) => {
-        const unspentTxOuts: UnspentTxOut[] =
-            _.filter(getUnspentTxOuts(), (uTxO) => uTxO.address === req.params.address);
-        res.send({'unspentTxOuts': unspentTxOuts});
+    // GET informações do endereço
+    app.get('/endereco/:endereco', (req, res) => {
+        const corpos: CorposNaoProcessados[] = _.filter(get_corpos_nao_processados(), (corpo) => corpo.endereco === req.params.endereco);
+        res.send({'corpos': corpos});
     });
 
-    app.get('/unspentTransactionOutputs', (req, res) => {
-        res.send(getUnspentTxOuts());
+    // GET nas transações não processadas
+    app.get('/transacoesNaoProcessadas', (req, res) => {
+        res.send(get_corpos_nao_processados());
     });
 
-    app.get('/myUnspentTransactionOutputs', (req, res) => {
-        res.send(getMyUnspentTransactionOutputs());
+    // GET nas transações não processadas da carteira
+    app.get('/minhasTransacoesNaoProcessadas', (req, res) => {
+        res.send(get_transacoes_nao_processadas_da_carteira());
     });
 
-    app.post('/mineRawBlock', (req, res) => {
-        if (req.body.data == null) {
-            res.send('data parameter is missing');
+    // POST para minerar os blocos
+    app.post('/mineraBlocos', (req, res) => {
+        if (req.body.dados == null)
             return;
-        }
-        const newBlock: Block = generateRawNextBlock(req.body.data);
-        if (newBlock === null) {
-            res.status(400).send('could not generate block');
-        } else {
-            res.send(newBlock);
-        }
+
+        const novo_bloco: Bloco = gera_proximo_bloco_raw(req.body.dados);
+        if (novo_bloco === null)
+            res.status(400).send('Não pode gerar os blocos');
+        else
+            res.send(novo_bloco);
     });
 
-    app.post('/mineBlock', (req, res) => {
-        const newBlock: Block = generateNextBlock();
-        if (newBlock === null) {
-            res.status(400).send('could not generate block');
-        } else {
-            res.send(newBlock);
-        }
+    // POST para minerar um novo bloco
+    app.post('/mineraBloco', (req, res) => {
+        const novo_bloco: Bloco = gera_proximo_bloco();
+        if (novo_bloco === null)
+            res.status(400).send('Não pode gerar os blocos');
+        else
+            res.send(novo_bloco);
     });
 
-    app.get('/balance', (req, res) => {
-        const balance: number = getAccountBalance();
-        res.send({'balance': balance});
+    // GET saldo da carteira
+    app.get('/saldo', (req, res) => {
+        const saldo: number = get_saldo_carteira();
+        res.send({'saldo': saldo});
     });
 
-    app.get('/address', (req, res) => {
-        const address: string = getPublicFromWallet();
-        res.send({'address': address});
+    // GET nas informações do endereço
+    app.get('/endereco', (req, res) => {
+        const endereco: string = get_chave_publica_carteira();
+        res.send({'endereco': endereco});
     });
 
-    app.post('/mineTransaction', (req, res) => {
-        const address = req.body.address;
-        const amount = req.body.amount;
+    // POST para minerar transação
+    app.post('/minerarTransacao', (req, res) => {
+        const endereco = req.body.endereco;
+        const valor = req.body.valor;
         try {
-            const resp = generatenextBlockWithTransaction(address, amount);
+            const resp = gera_proximo_bloco_com_transacao(endereco, valor);
             res.send(resp);
         } catch (e) {
             console.log(e.message);
@@ -98,15 +132,16 @@ const initHttpServer = (myHttpPort: number) => {
         }
     });
 
-    app.post('/sendTransaction', (req, res) => {
+    // POST para enviar uma transação
+    app.post('/enviaTransacao', (req, res) => {
         try {
-            const address = req.body.address;
-            const amount = req.body.amount;
+            const endereco = req.body.endereco;
+            const valor = req.body.valor;
 
-            if (address === undefined || amount === undefined) {
-                throw Error('invalid address or amount');
-            }
-            const resp = sendTransaction(address, amount);
+            if (endereco === undefined || valor === undefined)
+                throw Error('Endereço ou valor inválido');
+
+            const resp = envia_transacao(endereco, valor);
             res.send(resp);
         } catch (e) {
             console.log(e.message);
@@ -114,28 +149,42 @@ const initHttpServer = (myHttpPort: number) => {
         }
     });
 
-    app.get('/transactionPool', (req, res) => {
-        res.send(getTransactionPool());
+    // Recupera o pool de transações
+    app.get('/pool', (req, res) => {
+        res.send(get_pool_transacoes());
     });
 
+    // GET nos peers
     app.get('/peers', (req, res) => {
-        res.send(getSockets().map((s: any) => s._socket.remoteAddress + ':' + s._socket.remotePort));
+        res.send(get_sockets().map((s: any) => s._socket.remoteAddress + ':' + s._socket.remotePort));
     });
-    app.post('/addPeer', (req, res) => {
-        connectToPeers(req.body.peer);
+
+    // POST para adicionar peer
+    app.post('/adicionaPeer', (req, res) => {
+        conecta_aos_peers(req.body.peer);
         res.send();
     });
 
-    app.post('/stop', (req, res) => {
-        res.send({'msg' : 'stopping server'});
+    // POST para parar o servidor
+    app.post('/parar', (req, res) => {
+        res.send({'msg' : 'Parando servidor'});
         process.exit();
     });
 
-    app.listen(myHttpPort, () => {
-        console.log('Listening http on port: ' + myHttpPort);
+    app.listen(porta, () => {
+        console.log('HTTP na porta: ' + porta);
     });
 };
 
-initHttpServer(httpPort);
-initP2PServer(p2pPort);
-initWallet();
+
+
+/*
+ * --------------
+ * -- Chamadas --
+ * --------------
+ */
+
+
+inicia_servidor_http(httpPort);
+inicia_servidor_p2p(p2pPort);
+inicia_carteira();

@@ -1,299 +1,481 @@
+/*
+ * -----------------
+ * -- Importações --
+ * -----------------
+ */
+
+
 import * as CryptoJS from 'crypto-js';
 import * as _ from 'lodash';
-import {broadcastLatest, broadCastTransactionPool} from './p2p';
-import {
-    getCoinbaseTransaction, isValidAddress, processTransactions, Transaction, UnspentTxOut
-} from './transaction';
-import {addToTransactionPool, getTransactionPool, updateTransactionPool} from './transactionPool';
-import {hexToBinary} from './util';
-import {createTransaction, findUnspentTxOuts, getBalance, getPrivateFromWallet, getPublicFromWallet} from './wallet';
+import { broadcast_atualizacao, broadcast_pool } from './p2p';
+import { get_transacao_coinbase, is_endereco_valido, processa_transacoes, Transacao, CorposNaoProcessados } from './transaction';
+import { add_transacao_no_pool, get_pool_transacoes, atualiza_pool } from './transactionPool';
+import { hexadecimal_para_binario } from './util';
+import { cria_transacao, encontra_transacoes_nao_processadas, get_saldo, get_chave_privada_carteira, get_chave_publica_carteira } from './wallet';
 
-class Block {
 
-    public index: number;
+
+/*
+ * ----------------
+ * -- Estruturas --
+ * ----------------
+ */
+
+
+ /**
+  * Estrutura de bloco
+  */
+class Bloco {
+    public indice: number;
     public hash: string;
-    public previousHash: string;
+    public hash_anterior: string;
     public timestamp: number;
-    public data: Transaction[];
-    public difficulty: number;
+    public dados: Transacao[];
+    public dificuldade: number;
     public nonce: number;
 
-    constructor(index: number, hash: string, previousHash: string,
-                timestamp: number, data: Transaction[], difficulty: number, nonce: number) {
-        this.index = index;
-        this.previousHash = previousHash;
+    constructor(indice: number, hash: string, hash_anterior: string,
+                timestamp: number, dados: Transacao[], dificuldade: number, nonce: number) {
+        this.indice = indice;
+        this.hash_anterior = hash_anterior;
         this.timestamp = timestamp;
-        this.data = data;
+        this.dados = dados;
         this.hash = hash;
-        this.difficulty = difficulty;
+        this.dificuldade = dificuldade;
         this.nonce = nonce;
     }
 }
 
-const genesisTransaction = {
-    'txIns': [{'signature': '', 'txOutId': '', 'txOutIndex': 0}],
-    'txOuts': [{
-        'address': '04bfcab8722991ae774db48f934ca79cfb7dd991229153b9f732ba5334aafcd8e7266e47076996b55a14bf9913ee3145ce0cfc1372ada8ada74bd287450313534a',
-        'amount': 50
+
+
+/*
+ * ---------------
+ * -- Variáveis --
+ * ---------------
+ */
+
+
+const transacao_genese = {
+    'cabecalhos': [{'assinatura': '', 'id_saida': '', 'indice_saida': 0}],
+    'corpos': [{
+        'endereco': '0402a83e7e8fc9a1f3b64695848dfdca2c783373b61ae88586db308547095cf4cb16ee50a8adcfd7c636a2137475b058a9ee457c4079cc3dc147b9211407ca0aff',
+        'valor': 50
     }],
-    'id': 'e655f6a5f26dc9b4cac6e46f52336428287759cf81ef5ff10854f69d68f43fa3'
+    'id': '6cb3370c36515b797fb3c9bbcde801aec7a6d5d284bb7d2ba0930389f8b44455'
 };
 
-const genesisBlock: Block = new Block(
-    0, '91a73664bc84c0baa1fc75ea6e4aa6d1d20c5df664c724e3159aefc2e1186627', '', 1465154705, [genesisTransaction], 0, 0
+const bloco_genese: Bloco = new Bloco(
+    0, '91a73664bc84c0baa1fc75ea6e4aa6d1d20c5df664c724e3159aefc2e1186627', '', 1465154705, [transacao_genese], 0, 0
 );
 
-let blockchain: Block[] = [genesisBlock];
+let blockchain: Bloco[] = [bloco_genese];
 
-// the unspent txOut of genesis block is set to unspentTxOuts on startup
-let unspentTxOuts: UnspentTxOut[] = processTransactions(blockchain[0].data, [], 0);
+let corpos_nao_processados: CorposNaoProcessados[] = processa_transacoes(blockchain[0].dados, [], 0);
 
-const getBlockchain = (): Block[] => blockchain;
+const INTERVALO_GERACAO_BLOCOS: number = 10;
 
-const getUnspentTxOuts = (): UnspentTxOut[] => _.cloneDeep(unspentTxOuts);
+const INTERVALO_AJUSTE_DIFICULDADE: number = 10;
 
-// and txPool should be only updated at the same time
-const setUnspentTxOuts = (newUnspentTxOut: UnspentTxOut[]) => {
-    console.log('replacing unspentTxouts with: %s', newUnspentTxOut);
-    unspentTxOuts = newUnspentTxOut;
+
+
+/*
+ * -------------
+ * -- Funções --
+ * -------------
+ */
+
+
+/**
+ * Recupera a blockchain.
+ */
+const get_blockchain = (): Bloco[] => {
+    return blockchain;
+}
+
+
+/**
+ * Recupera corpos não processados
+ */
+const get_corpos_nao_processados = (): CorposNaoProcessados[] => {
+    return _.cloneDeep(corpos_nao_processados);;
+}
+
+
+/**
+ * Atualiza corpos não processados com o parâmetro.
+ * @param novos_corpos Novos valores
+ */
+const atualiza_corpos_nao_processados = (novos_corpos: CorposNaoProcessados[]) => {
+    corpos_nao_processados = novos_corpos;
 };
 
-const getLatestBlock = (): Block => blockchain[blockchain.length - 1];
 
-// in seconds
-const BLOCK_GENERATION_INTERVAL: number = 10;
+/**
+ * Recupera último bloco
+ */
+const get_ultimo_bloco = (): Bloco => {
+    return blockchain[blockchain.length - 1];
+}
 
-// in blocks
-const DIFFICULTY_ADJUSTMENT_INTERVAL: number = 10;
 
-const getDifficulty = (aBlockchain: Block[]): number => {
-    const latestBlock: Block = aBlockchain[blockchain.length - 1];
-    if (latestBlock.index % DIFFICULTY_ADJUSTMENT_INTERVAL === 0 && latestBlock.index !== 0) {
-        return getAdjustedDifficulty(latestBlock, aBlockchain);
-    } else {
-        return latestBlock.difficulty;
-    }
+/**
+ * Recupera a dificuldade da cadeia informada.
+ * @param cadeia_de_blocos Cadeia de blocos a ser avaliada
+ */
+const get_dificuldade = (cadeia_de_blocos: Bloco[]): number => {
+    // Retorna a dificuldade ajustada
+    const ultimo_bloco: Bloco = cadeia_de_blocos[blockchain.length - 1];
+    if (ultimo_bloco.indice % INTERVALO_AJUSTE_DIFICULDADE === 0 && ultimo_bloco.indice !== 0)
+        return get_dificuldade_ajustada(ultimo_bloco, cadeia_de_blocos);
+    // Senão retorna a própria dificuldade
+    else
+        return ultimo_bloco.dificuldade;
 };
 
-const getAdjustedDifficulty = (latestBlock: Block, aBlockchain: Block[]) => {
-    const prevAdjustmentBlock: Block = aBlockchain[blockchain.length - DIFFICULTY_ADJUSTMENT_INTERVAL];
-    const timeExpected: number = BLOCK_GENERATION_INTERVAL * DIFFICULTY_ADJUSTMENT_INTERVAL;
-    const timeTaken: number = latestBlock.timestamp - prevAdjustmentBlock.timestamp;
-    if (timeTaken < timeExpected / 2) {
-        return prevAdjustmentBlock.difficulty + 1;
-    } else if (timeTaken > timeExpected * 2) {
-        return prevAdjustmentBlock.difficulty - 1;
-    } else {
-        return prevAdjustmentBlock.difficulty;
-    }
+
+/**
+ * Retorna a dificuldade ajustada da cadeia informada.
+ * @param ultimo_bloco Último bloco da cadeia
+ * @param cadeia_de_blocos Cadeia cuja dificuldade será avaliada
+ */
+const get_dificuldade_ajustada = (ultimo_bloco: Bloco, cadeia_de_blocos: Bloco[]) => {
+    const utlimo_ajuste: Bloco = cadeia_de_blocos[blockchain.length - INTERVALO_AJUSTE_DIFICULDADE];
+    const tempo_esperado: number = INTERVALO_GERACAO_BLOCOS * INTERVALO_AJUSTE_DIFICULDADE;
+    const tempo_gasto: number = ultimo_bloco.timestamp - utlimo_ajuste.timestamp;
+    
+    if (tempo_gasto < tempo_esperado / 2)
+        return utlimo_ajuste.dificuldade + 1;
+    else if (tempo_gasto > tempo_esperado * 2)
+        return utlimo_ajuste.dificuldade - 1;
+    else
+        return utlimo_ajuste.dificuldade;
 };
 
-const getCurrentTimestamp = (): number => Math.round(new Date().getTime() / 1000);
 
-const generateRawNextBlock = (blockData: Transaction[]) => {
-    const previousBlock: Block = getLatestBlock();
-    const difficulty: number = getDifficulty(getBlockchain());
-    const nextIndex: number = previousBlock.index + 1;
-    const nextTimestamp: number = getCurrentTimestamp();
-    const newBlock: Block = findBlock(nextIndex, previousBlock.hash, nextTimestamp, blockData, difficulty);
-    if (addBlockToChain(newBlock)) {
-        broadcastLatest();
-        return newBlock;
-    } else {
+/**
+ * Recupera o timestamp atual.
+ */
+const get_timestamp_atual = (): number => {
+    return Math.round(new Date().getTime() / 1000);
+}
+
+
+/**
+ * Insere próximo bloco
+ * @param dados_do_bloco Dados a serem inseridos no bloco
+ */
+const gera_proximo_bloco_raw = (dados_do_bloco: Transacao[]) => {
+    const bloco_anterior: Bloco = get_ultimo_bloco();
+    const dificuldade: number = get_dificuldade(get_blockchain());
+    const proximo_indice: number = bloco_anterior.indice + 1;
+    const proximo_timestamp: number = get_timestamp_atual();
+    const novo_bloco: Bloco = encontra_bloco(proximo_indice, bloco_anterior.hash, proximo_timestamp, dados_do_bloco, dificuldade);
+
+    if (add_bloco_na_cadeia(novo_bloco)) {
+        broadcast_atualizacao();
+        return novo_bloco;
+    } else
         return null;
-    }
-
 };
 
-// gets the unspent transaction outputs owned by the wallet
-const getMyUnspentTransactionOutputs = () => {
-    return findUnspentTxOuts(getPublicFromWallet(), getUnspentTxOuts());
+
+/**
+ * Recupera transações não processadas da carteira.
+ */
+const get_transacoes_nao_processadas_da_carteira = () => {
+    return encontra_transacoes_nao_processadas(get_chave_publica_carteira(), get_corpos_nao_processados());
 };
 
-const generateNextBlock = () => {
-    const coinbaseTx: Transaction = getCoinbaseTransaction(getPublicFromWallet(), getLatestBlock().index + 1);
-    const blockData: Transaction[] = [coinbaseTx].concat(getTransactionPool());
-    return generateRawNextBlock(blockData);
+
+/**
+ * Gera o próximo bloco já com a transação coinbase.
+ */
+const gera_proximo_bloco = () => {
+    const tran_coinbase: Transacao = get_transacao_coinbase(get_chave_publica_carteira(), get_ultimo_bloco().indice + 1);
+    const dados_do_bloco: Transacao[] = [tran_coinbase].concat(get_pool_transacoes());
+    return gera_proximo_bloco_raw(dados_do_bloco);
 };
 
-const generatenextBlockWithTransaction = (receiverAddress: string, amount: number) => {
-    if (!isValidAddress(receiverAddress)) {
-        throw Error('invalid address');
-    }
-    if (typeof amount !== 'number') {
-        throw Error('invalid amount');
-    }
-    const coinbaseTx: Transaction = getCoinbaseTransaction(getPublicFromWallet(), getLatestBlock().index + 1);
-    const tx: Transaction = createTransaction(receiverAddress, amount, getPrivateFromWallet(), getUnspentTxOuts(), getTransactionPool());
-    const blockData: Transaction[] = [coinbaseTx, tx];
-    return generateRawNextBlock(blockData);
+
+/**
+ * Gera próximo bloco já com a transação.
+ * @param endereco_recebedor Endereço do recebedor
+ * @param valor Valor da transação
+ */
+const gera_proximo_bloco_com_transacao = (endereco_recebedor: string, valor: number) => {
+    if (!is_endereco_valido(endereco_recebedor))
+        throw Error('Endereço inválido');
+    if (typeof valor !== 'number')
+        throw Error('Valor inválido');
+
+    // Monta a transação
+    const tran_coinbase: Transacao = get_transacao_coinbase(get_chave_publica_carteira(), get_ultimo_bloco().indice + 1);
+    const tx: Transacao = cria_transacao(endereco_recebedor, valor, get_chave_privada_carteira(), get_corpos_nao_processados(), get_pool_transacoes());
+    const dados_do_bloco: Transacao[] = [tran_coinbase, tx];
+    return gera_proximo_bloco_raw(dados_do_bloco);
 };
 
-const findBlock = (index: number, previousHash: string, timestamp: number, data: Transaction[], difficulty: number): Block => {
+
+/**
+ * Encontra um bloco para as informações passadas.
+ * @param indice Índice do bloco
+ * @param hash_anterior Hash do bloco anterior
+ * @param timestamp Timestamp de criação
+ * @param dados Dados do bloco
+ * @param dificuldade Dificuldade do bloco a ser encontrado
+ */
+const encontra_bloco = (indice: number, hash_anterior: string, timestamp: number, dados: Transacao[], dificuldade: number): Bloco => {
     let nonce = 0;
     while (true) {
-        const hash: string = calculateHash(index, previousHash, timestamp, data, difficulty, nonce);
-        if (hashMatchesDifficulty(hash, difficulty)) {
-            return new Block(index, hash, previousHash, timestamp, data, difficulty, nonce);
-        }
+        const hash: string = calcula_hash(indice, hash_anterior, timestamp, dados, dificuldade, nonce);
+        if (hash_bate_dificuldade(hash, dificuldade))
+            return new Bloco(indice, hash, hash_anterior, timestamp, dados, dificuldade, nonce);
         nonce++;
     }
 };
 
-const getAccountBalance = (): number => {
-    return getBalance(getPublicFromWallet(), getUnspentTxOuts());
+
+/**
+ * Recupera o saldo da carteira.
+ */
+const get_saldo_carteira = (): number => {
+    return get_saldo(get_chave_publica_carteira(), get_corpos_nao_processados());
 };
 
-const sendTransaction = (address: string, amount: number): Transaction => {
-    const tx: Transaction = createTransaction(address, amount, getPrivateFromWallet(), getUnspentTxOuts(), getTransactionPool());
-    addToTransactionPool(tx, getUnspentTxOuts());
-    broadCastTransactionPool();
+
+/**
+ * Envia a transação com as características informadas.
+ * @param address Endereço recebedor
+ * @param valor Valor a ser enviado
+ */
+const envia_transacao = (address: string, valor: number): Transacao => {
+    const tx: Transacao = cria_transacao(address, valor, get_chave_privada_carteira(), get_corpos_nao_processados(), get_pool_transacoes());
+    add_transacao_no_pool(tx, get_corpos_nao_processados());
+    broadcast_pool();
     return tx;
 };
 
-const calculateHashForBlock = (block: Block): string =>
-    calculateHash(block.index, block.previousHash, block.timestamp, block.data, block.difficulty, block.nonce);
 
-const calculateHash = (index: number, previousHash: string, timestamp: number, data: Transaction[],
-                       difficulty: number, nonce: number): string =>
-    CryptoJS.SHA256(index + previousHash + timestamp + data + difficulty + nonce).toString();
+/**
+ * Calcula o hash para um bloco de transações.
+ * @param bloco Bloco de transações que terá o hash calculado.
+ */
+const calcula_hash_para_bloco = (bloco: Bloco): string => {
+    return calcula_hash(bloco.indice, bloco.hash_anterior, bloco.timestamp, bloco.dados, bloco.dificuldade, bloco.nonce);
+}
 
-const isValidBlockStructure = (block: Block): boolean => {
-    return typeof block.index === 'number'
-        && typeof block.hash === 'string'
-        && typeof block.previousHash === 'string'
-        && typeof block.timestamp === 'number'
-        && typeof block.data === 'object';
+
+/**
+ * Calcula o hash para um bloco com as características informadas.
+ * @param indice Índice do bloco
+ * @param hash_anterior Hash do bloco anterior
+ * @param timestamp Timestamp de criação
+ * @param dados Dados do bloco
+ * @param dificuldade Dificuldade do bloco
+ * @param nonce Nonce do bloco
+ */
+const calcula_hash = (indice: number, hash_anterior: string, timestamp: number, dados: Transacao[], dificuldade: number, nonce: number): string => {
+    return CryptoJS.SHA256(indice + hash_anterior + timestamp + dados + dificuldade + nonce).toString();
+}
+
+
+/**
+ * Verifica a estrutura de dados do bloco.
+ * @param bloco Bloco a ser verificado
+ */
+const is_estrutura_bloco_valida = (bloco: Bloco): boolean => {
+    return typeof bloco.indice === 'number'
+        && typeof bloco.hash === 'string'
+        && typeof bloco.hash_anterior === 'string'
+        && typeof bloco.timestamp === 'number'
+        && typeof bloco.dados === 'object';
 };
 
-const isValidNewBlock = (newBlock: Block, previousBlock: Block): boolean => {
-    if (!isValidBlockStructure(newBlock)) {
-        console.log('invalid block structure: %s', JSON.stringify(newBlock));
+
+/**
+ * Verifica a validade do bloco.
+ * @param novo_bloco Bloco a ser verificado
+ * @param bloco_anterior Bloco anterior
+ */
+const is_novo_bloco_valido = (novo_bloco: Bloco, bloco_anterior: Bloco): boolean => {
+    if (!is_estrutura_bloco_valida(novo_bloco)) 
         return false;
-    }
-    if (previousBlock.index + 1 !== newBlock.index) {
-        console.log('invalid index');
+
+    // Se os índices não batem
+    if (bloco_anterior.indice + 1 !== novo_bloco.indice)
         return false;
-    } else if (previousBlock.hash !== newBlock.previousHash) {
-        console.log('invalid previoushash');
+    // Se os hashes não batem
+    else if (bloco_anterior.hash !== novo_bloco.hash_anterior)
         return false;
-    } else if (!isValidTimestamp(newBlock, previousBlock)) {
-        console.log('invalid timestamp');
+    // Se o timestamp não base
+    else if (!is_timestamp_valido(novo_bloco, bloco_anterior))
         return false;
-    } else if (!hasValidHash(newBlock)) {
+    // Se o hash não é válido
+    else if (!has_hash_valido(novo_bloco))
         return false;
-    }
+
+
+    // Se chegou aqui é válido
     return true;
 };
 
-const getAccumulatedDifficulty = (aBlockchain: Block[]): number => {
-    return aBlockchain
-        .map((block) => block.difficulty)
-        .map((difficulty) => Math.pow(2, difficulty))
+
+/**
+ * Calcula a dificuldade acumuldade de uma cadeia
+ * @param cadeia_de_blocos Cadeia de blocos base para o cálculo
+ */
+const get_dificuldade_acumulada = (cadeia_de_blocos: Bloco[]): number => {
+    return cadeia_de_blocos
+        .map((bloco) => {
+            return bloco.dificuldade;
+        })
+        .map((dificuldade) => {
+            return Math.pow(2, dificuldade);
+        })
         .reduce((a, b) => a + b);
 };
 
-const isValidTimestamp = (newBlock: Block, previousBlock: Block): boolean => {
-    return ( previousBlock.timestamp - 60 < newBlock.timestamp )
-        && newBlock.timestamp - 60 < getCurrentTimestamp();
+
+/**
+ * Valida o timestamp do bloco informado.
+ * @param novo_bloco Bloco a ser verificado
+ * @param bloco_anterior Bloco anterior
+ */
+const is_timestamp_valido = (novo_bloco: Bloco, bloco_anterior: Bloco): boolean => {
+    // Timestamp do bloco anterior deve ser menor, naturalmente
+    return (bloco_anterior.timestamp - 60 < novo_bloco.timestamp) && novo_bloco.timestamp - 60 < get_timestamp_atual();
 };
 
-const hasValidHash = (block: Block): boolean => {
 
-    if (!hashMatchesBlockContent(block)) {
-        console.log('invalid hash, got:' + block.hash);
+/**
+ * Valida o hash de um determinado bloco.
+ * @param bloco Bloco cujo hash será validado
+ */
+const has_hash_valido = (bloco: Bloco): boolean => {
+
+    // Se não é o que deveria ser
+    if (!hash_bate_com_bloco(bloco))
         return false;
-    }
 
-    if (!hashMatchesDifficulty(block.hash, block.difficulty)) {
-        console.log('block difficulty not satisfied. Expected: ' + block.difficulty + 'got: ' + block.hash);
-    }
+    // Se não tem a dificuldade desejada
+    if (!hash_bate_dificuldade(bloco.hash, bloco.dificuldade)) 
+        return false;
+
     return true;
 };
 
-const hashMatchesBlockContent = (block: Block): boolean => {
-    const blockHash: string = calculateHashForBlock(block);
-    return blockHash === block.hash;
-};
 
-const hashMatchesDifficulty = (hash: string, difficulty: number): boolean => {
-    const hashInBinary: string = hexToBinary(hash);
-    const requiredPrefix: string = '0'.repeat(difficulty);
-    return hashInBinary.startsWith(requiredPrefix);
-};
-
-/*
-    Checks if the given blockchain is valid. Return the unspent txOuts if the chain is valid
+/**
+ * Verifica se o hash do bloco é compatível com o que deveria ser.
+ * @param bloco Bloco informado
  */
-const isValidChain = (blockchainToValidate: Block[]): UnspentTxOut[] => {
-    console.log('isValidChain:');
-    console.log(JSON.stringify(blockchainToValidate));
-    const isValidGenesis = (block: Block): boolean => {
-        return JSON.stringify(block) === JSON.stringify(genesisBlock);
+const hash_bate_com_bloco = (bloco: Bloco): boolean => {
+    const blockHash: string = calcula_hash_para_bloco(bloco);
+    return blockHash === bloco.hash;
+};
+
+
+/**
+ * Verifica se o hash bate com a dificuldade informada.
+ * @param hash Hash a ser verificado
+ * @param dificuldade Dificuldade desejada
+ */
+const hash_bate_dificuldade = (hash: string, dificuldade: number): boolean => {
+    const hash_binario: string = hexadecimal_para_binario(hash);
+    const prefixo: string = '0'.repeat(dificuldade);
+    return hash_binario.startsWith(prefixo);
+};
+
+
+/**
+ * Verifica se a cadeia informada é válida
+ * @param cadeia Cadeia a ser validada
+ */
+const is_cadeia_valida = (cadeia: Bloco[]): CorposNaoProcessados[] => {
+
+    // Verifica o bloco genese
+    const genese_valido = (bloco: Bloco): boolean => {
+        return JSON.stringify(bloco) === JSON.stringify(bloco_genese);
     };
 
-    if (!isValidGenesis(blockchainToValidate[0])) {
+    if (!genese_valido(cadeia[0]))
         return null;
-    }
-    /*
-    Validate each block in the chain. The block is valid if the block structure is valid
-      and the transaction are valid
-     */
-    let aUnspentTxOuts: UnspentTxOut[] = [];
 
-    for (let i = 0; i < blockchainToValidate.length; i++) {
-        const currentBlock: Block = blockchainToValidate[i];
-        if (i !== 0 && !isValidNewBlock(blockchainToValidate[i], blockchainToValidate[i - 1])) {
-            return null;
-        }
 
-        aUnspentTxOuts = processTransactions(currentBlock.data, aUnspentTxOuts, currentBlock.index);
-        if (aUnspentTxOuts === null) {
-            console.log('invalid transactions in blockchain');
+    // Valida cada bloco
+    let corpos_nao_processados: CorposNaoProcessados[] = [];
+
+    for (let i = 0; i < cadeia.length; i++) {
+
+        // Valida o bloco
+        const currentBlock: Bloco = cadeia[i];
+        if (i !== 0 && !is_novo_bloco_valido(cadeia[i], cadeia[i - 1]))
             return null;
-        }
+
+        // Valida suas transações
+        corpos_nao_processados = processa_transacoes(currentBlock.dados, corpos_nao_processados, currentBlock.indice);
+        if (corpos_nao_processados === null)
+            return null;
     }
-    return aUnspentTxOuts;
+
+    return corpos_nao_processados;
 };
 
-const addBlockToChain = (newBlock: Block): boolean => {
-    if (isValidNewBlock(newBlock, getLatestBlock())) {
-        const retVal: UnspentTxOut[] = processTransactions(newBlock.data, getUnspentTxOuts(), newBlock.index);
-        if (retVal === null) {
-            console.log('block is not valid in terms of transactions');
+
+/**
+ * Adiciona o bloco recebido na cadeia.
+ * @param novo_bloco Bloco a ser adicionado
+ */
+const add_bloco_na_cadeia = (novo_bloco: Bloco): boolean => {
+    if (is_novo_bloco_valido(novo_bloco, get_ultimo_bloco())) {
+        const retVal: CorposNaoProcessados[] = processa_transacoes(novo_bloco.dados, get_corpos_nao_processados(), novo_bloco.indice);
+
+        if (retVal === null)
             return false;
-        } else {
-            blockchain.push(newBlock);
-            setUnspentTxOuts(retVal);
-            updateTransactionPool(unspentTxOuts);
+        else {
+            blockchain.push(novo_bloco);
+            atualiza_corpos_nao_processados(retVal);
+            atualiza_pool(corpos_nao_processados);
             return true;
         }
     }
+
     return false;
 };
 
-const replaceChain = (newBlocks: Block[]) => {
-    const aUnspentTxOuts = isValidChain(newBlocks);
-    const validChain: boolean = aUnspentTxOuts !== null;
-    if (validChain &&
-        getAccumulatedDifficulty(newBlocks) > getAccumulatedDifficulty(getBlockchain())) {
-        console.log('Received blockchain is valid. Replacing current blockchain with received blockchain');
-        blockchain = newBlocks;
-        setUnspentTxOuts(aUnspentTxOuts);
-        updateTransactionPool(unspentTxOuts);
-        broadcastLatest();
-    } else {
-        console.log('Received blockchain invalid');
+
+/**
+ * Atualiza a blockchain atual.
+ * @param novos_blocos Blocos representando a nova cadeia
+ */
+const atualiza_cadeia = (novos_blocos: Bloco[]) => {
+    const corpos_nao_processados = is_cadeia_valida(novos_blocos);
+    const valida_cadeia: boolean = corpos_nao_processados !== null;
+
+    if (valida_cadeia && get_dificuldade_acumulada(novos_blocos) > get_dificuldade_acumulada(get_blockchain())) {
+        blockchain = novos_blocos;
+        atualiza_corpos_nao_processados(corpos_nao_processados);
+        atualiza_pool(corpos_nao_processados);
+        broadcast_atualizacao();
     }
 };
 
-const handleReceivedTransaction = (transaction: Transaction) => {
-    addToTransactionPool(transaction, getUnspentTxOuts());
+
+/**
+ * Adiciona a transação recebida no pool.
+ * @param transaction Transação recebida
+ */
+const interpreta_transacao_recebida = (transaction: Transacao) => {
+    add_transacao_no_pool(transaction, get_corpos_nao_processados());
 };
 
-export {
-    Block, getBlockchain, getUnspentTxOuts, getLatestBlock, sendTransaction,
-    generateRawNextBlock, generateNextBlock, generatenextBlockWithTransaction,
-    handleReceivedTransaction, getMyUnspentTransactionOutputs,
-    getAccountBalance, isValidBlockStructure, replaceChain, addBlockToChain
-};
+
+
+/*
+ * -----------------
+ * -- Exportações --
+ * -----------------
+ */
+
+
+export { Bloco, get_blockchain, get_corpos_nao_processados, get_ultimo_bloco, envia_transacao, gera_proximo_bloco_raw, gera_proximo_bloco, gera_proximo_bloco_com_transacao, interpreta_transacao_recebida, get_transacoes_nao_processadas_da_carteira, get_saldo_carteira, is_estrutura_bloco_valida, atualiza_cadeia, add_bloco_na_cadeia };
