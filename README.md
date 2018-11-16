@@ -1,7 +1,12 @@
-# Naivecoin
+# Milecoin
 
-The repository for the naivecoin tutorial: https://lhartikk.github.io/
+Seguimos as instruções do tutorial do [lhartikk](https://lhartikk.github.io/)! Recomendamos fortemente que conheça o projeto da [NaiveCoin](https://github.com/lhartikk/naivecoin), que ensina passo a passo a montar sua própria criptomoeda.
 
+
+## Configurando o projeto
+
+É necessário possuir o [Node.JS](https://nodejs.org/en/download/) instalado na sua máquina para configurar o ambiente, além do gerenciador de pacotes [NPM](https://www.npmjs.com/). 
+Uma vez configurado, execute os comandos no diretório raiz do projeto:
 ```
 npm install
 npm start
