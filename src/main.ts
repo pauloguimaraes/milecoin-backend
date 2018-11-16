@@ -120,7 +120,7 @@ const inicia_servidor_http = (porta: number) => {
     });
 
     // POST para minerar transação
-    app.post('/minerarTransacao', (req, res) => {
+    app.post('/mineraTransacao', (req, res) => {
         const endereco = req.body.endereco;
         const valor = req.body.valor;
         try {

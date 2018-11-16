@@ -60,7 +60,7 @@ curl http://localhost:3001/address/04f72a4541275aeb4344a8b049bfe2734b49fe25c08d5
 ```
 
 ### Adiciona um peer
-Adiciona o peer executando na porta 4001 (por exemplo) à rede:
+Adiciona o peer executando na porta 4000 (por exemplo) à rede:
 ```
 curl -H "Content-type:application/json" --data '{"peer" : "ws://localhost:6001"}' http://localhost:4000/addPeer
 ```
