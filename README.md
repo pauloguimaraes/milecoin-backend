@@ -54,7 +54,7 @@ Consulta o saldo da carteira hospedada no endereço:
 curl http://localhost:3001/saldo
 ```
 
-## Consulta informações de um endereço específico
+### Consulta informações de um endereço específico
 ```
 curl http://localhost:3001/address/04f72a4541275aeb4344a8b049bfe2734b49fe25c08d56918f033507b96a61f9e3c330c4fcd46d0854a712dc878b9c280abe90c788c47497e06df78b25bf60ae64
 ```
@@ -65,7 +65,7 @@ Adiciona o peer executando na porta 4001 (por exemplo) à rede:
 curl -H "Content-type:application/json" --data '{"peer" : "ws://localhost:6001"}' http://localhost:4000/addPeer
 ```
 
-## Consulta peers conectados
+### Consulta peers conectados
 Consulta todos os peers conectados na rede:
 ```
 curl http://localhost:3001/peers
