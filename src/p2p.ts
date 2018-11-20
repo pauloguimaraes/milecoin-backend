@@ -188,6 +188,7 @@ const write = (ws: WebSocket, mensagem: Mensagem): void => {
  * @param mensagem Mensagem a ser enviada
  */
 const broadcast = (mensagem: Mensagem): void => {
+    console.log('mensagem');
     sockets.forEach((socket) => write(socket, mensagem));
 }
 

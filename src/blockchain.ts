@@ -58,10 +58,10 @@ class Bloco {
 const transacao_genese = {
     'cabecalhos': [{'assinatura': '', 'id_saida': '', 'indice_saida': 0}],
     'corpos': [{
-        'endereco': '0402a83e7e8fc9a1f3b64695848dfdca2c783373b61ae88586db308547095cf4cb16ee50a8adcfd7c636a2137475b058a9ee457c4079cc3dc147b9211407ca0aff',
+        'endereco': '046055b0a275fe7cddeec71245ee60f7271b40e9d8f8d0ad63d17ed5beafd9f801db8686fea5bfbec328c58aa17234b30eb9f7b42c58ccdc276061330c77706912',
         'valor': 50
     }],
-    'id': '6cb3370c36515b797fb3c9bbcde801aec7a6d5d284bb7d2ba0930389f8b44455'
+    'id': '5d52042ff66fdef594eb853dd8d9d59f8b5be5d5ed4b823de3b824608d372968'
 };
 
 const bloco_genese: Bloco = new Bloco(
