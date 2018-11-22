@@ -39,34 +39,34 @@ curl -X POST http://localhost:3001/mineraBlocos
 
 ### Consulta pool de transações
 ```
-curl http://localhost:3001/pool
+curl http://ec2-52-14-231-202.us-east-2.compute.amazonaws.com:3001/pool
 ```
 
 ### Minera uma transação
 Envia uma transação e já a minera:
 ```
-curl -H "Content-type: application/json" --data '{"endereco": "04bfcab8722991ae774db48f934ca79cfb7dd991229153b9f732ba5334aafcd8e7266e47076996b55a14bf9913ee3145ce0cfc1372ada8ada74bd287450313534b", "valor" : 35}' http://localhost:3001/mineraTransacao
+curl -H "Content-type: application/json" --data '{"endereco": "04bfcab8722991ae774db48f934ca79cfb7dd991229153b9f732ba5334aafcd8e7266e47076996b55a14bf9913ee3145ce0cfc1372ada8ada74bd287450313534b", "valor" : 35}' http://ec2-52-14-231-202.us-east-2.compute.amazonaws.com:3001/mineraTransacao
 ```
 
 ### Consulta saldo
 Consulta o saldo da carteira hospedada no endereço:
 ```
-curl http://localhost:3001/saldo
+curl http://ec2-52-14-231-202.us-east-2.compute.amazonaws.com:3001/saldo
 ```
 
 ### Consulta informações de um endereço específico
 ```
-curl http://localhost:3001/address/04f72a4541275aeb4344a8b049bfe2734b49fe25c08d56918f033507b96a61f9e3c330c4fcd46d0854a712dc878b9c280abe90c788c47497e06df78b25bf60ae64
+curl http://ec2-52-14-231-202.us-east-2.compute.amazonaws.com:3001/address/04f72a4541275aeb4344a8b049bfe2734b49fe25c08d56918f033507b96a61f9e3c330c4fcd46d0854a712dc878b9c280abe90c788c47497e06df78b25bf60ae64
 ```
 
 ### Adiciona um peer
-Adiciona o peer executando na porta 4000 (por exemplo) à rede:
+Adiciona o peer executando na porta 3001 (por exemplo) à rede:
 ```
-curl -H "Content-type:application/json" --data '{"peer" : "ws://localhost:6001"}' http://localhost:4000/addPeer
+curl -H "Content-type:application/json" --data '{"peer" : "ws://ec2-52-14-231-202.us-east-2.compute.amazonaws.com:6001"}' http://localhost:3001/addPeer
 ```
 
 ### Consulta peers conectados
 Consulta todos os peers conectados na rede:
 ```
-curl http://localhost:3001/peers
+curl http://ec2-52-14-231-202.us-east-2.compute.amazonaws.com:3001/peers
 ```
