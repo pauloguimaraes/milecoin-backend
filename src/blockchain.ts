@@ -248,11 +248,20 @@ const get_saldo_carteira = (): number => {
  * @param address Endereço recebedor
  * @param valor Valor a ser enviado
  */
-const envia_transacao = (address: string, valor: number): Transacao => {
-    const tx: Transacao = cria_transacao(address, valor, get_chave_privada_carteira(), get_corpos_nao_processados(), get_pool_transacoes());
-    add_transacao_no_pool(tx, get_corpos_nao_processados());
-    broadcast_pool();
-    return tx;
+const envia_transacao = (address: string, valor: number, assinatura: string): Transacao => {
+
+    if(assinatura === '') {
+        const tx: Transacao = cria_transacao(address, valor, get_chave_privada_carteira(), get_corpos_nao_processados(), get_pool_transacoes());
+        add_transacao_no_pool(tx, get_corpos_nao_processados());
+        broadcast_pool();
+        return tx;
+    }
+    else {
+        const tx: Transacao = cria_transacao(address, valor, assinatura, get_corpos_nao_processados(), get_pool_transacoes());
+        add_transacao_no_pool(tx, get_corpos_nao_processados());
+        broadcast_pool();
+        return tx;
+    }
 };
 
 

@@ -137,12 +137,19 @@ const inicia_servidor_http = (porta: number) => {
         try {
             const endereco = req.body.endereco;
             const valor = req.body.valor;
+            const assinatura = req.body.assinatura;
 
             if (endereco === undefined || valor === undefined)
                 throw Error('Endereço ou valor inválido');
 
-            const resp = envia_transacao(endereco, valor);
-            res.send(resp);
+            if(assinatura === undefined) {
+                const resp = envia_transacao(endereco, valor, '');
+                res.send(resp);
+            }
+            else {
+                const resp = envia_transacao(endereco, valor, assinatura);
+                res.send(resp);
+            }
         } catch (e) {
             console.log(e.message);
             res.status(400).send(e.message);
