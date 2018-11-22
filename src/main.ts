@@ -10,9 +10,10 @@ import * as express from 'express';
 import * as _ from 'lodash';
 import { Bloco, gera_proximo_bloco, gera_proximo_bloco_com_transacao, gera_proximo_bloco_raw, get_saldo_carteira, get_blockchain, get_transacoes_nao_processadas_da_carteira, get_corpos_nao_processados, envia_transacao } from './blockchain';
 import { conecta_aos_peers, get_sockets, inicia_servidor_p2p } from './p2p';
-import { CorposNaoProcessados } from './transaction';
+import { CorposNaoProcessados, get_chave_publica } from './transaction';
 import { get_pool_transacoes } from './transactionPool';
-import { get_chave_publica_carteira, inicia_carteira } from './wallet';
+import { get_chave_publica_carteira, inicia_carteira, gera_chave_privada } from './wallet';
+import { resolveNaptr } from 'dns';
 
 
 
@@ -170,6 +171,12 @@ const inicia_servidor_http = (porta: number) => {
     app.post('/adicionaPeer', (req, res) => {
         conecta_aos_peers(req.body.peer);
         res.send();
+    });
+
+    app.get('/chaves', (req, res) => {
+        var priv = gera_chave_privada();
+        var pub = get_chave_publica(priv);
+        res.send({'privada': priv, 'publica': pub})
     });
 
     // POST para parar o servidor

@@ -23,23 +23,28 @@ Sigamos para as operações que podem ser executadas através da API:
 
 ### Recupera a blockchain
 ```
-curl http://localhost:3001/blocos
+curl http://ec2-52-14-231-202.us-east-2.compute.amazonaws.com:3001/blocos
+```
+
+### Gera chaves
+```
+curl http://ec2-52-14-231-202.us-east-2.compute.amazonaws.com/chaves
 ```
 
 ### Envia transação
 ```
-curl -H "Content-type: application/json" --data '{"endereco": "04bfcab8722991ae774db48f934ca79cfb7dd991229153b9f732ba5334aafcd8e7266e47076996b55a14bf9913ee3145ce0cfc1372ada8ada74bd287450313534b", "valor" : 35}' http://localhost:3001/enviaTransacao
+curl -H "Content-type: application/json" --data '{"endereco": "04bfcab8722991ae774db48f934ca79cfb7dd991229153b9f732ba5334aafcd8e7266e47076996b55a14bf9913ee3145ce0cfc1372ada8ada74bd287450313534b", "valor" : 35}' http://ec2-52-14-231-202.us-east-2.compute.amazonaws.com:3001/enviaTransacao
 ```
 
 ### Envia transação de outra carteira
 ```
-curl -H "Content-type: application/json" --data '{"endereco": "04bfcab8722991ae774db48f934ca79cfb7dd991229153b9f732ba5334aafcd8e7266e47076996b55a14bf9913ee3145ce0cfc1372ada8ada74bd287450313534b", "valor" : 35, "assinatura": "CHAVE_PRIVADA_DA_CARTEIRA"}' http://localhost:3001/enviaTransacao
+curl -H "Content-type: application/json" --data '{"endereco": "04bfcab8722991ae774db48f934ca79cfb7dd991229153b9f732ba5334aafcd8e7266e47076996b55a14bf9913ee3145ce0cfc1372ada8ada74bd287450313534b", "valor" : 35, "assinatura": "CHAVE_PRIVADA_DA_CARTEIRA"}' http://ec2-52-14-231-202.us-east-2.compute.amazonaws.com:3001/enviaTransacao
 ```
 
 ### Minera um bloco
 Essa função minera um bloco, registrando as operações no pool nele
 ```
-curl -X POST http://localhost:3001/mineraBlocos
+curl -X POST http://ec2-52-14-231-202.us-east-2.compute.amazonaws.com:3001/mineraBlocos
 ```
 
 ### Consulta pool de transações
