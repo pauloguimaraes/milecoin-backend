@@ -110,7 +110,12 @@ const inicia_servidor_http = (porta: number) => {
 
     // GET saldo da carteira
     app.get('/saldo', (req, res) => {
-        const saldo: number = get_saldo_carteira();
+        const saldo: number = get_saldo_carteira(null);
+        res.send({'saldo': saldo});
+    });
+
+    app.get('/saldo/:carteira', (req, res) => {
+        const saldo: number = get_saldo_carteira(req.params.carteira);
         res.send({'saldo': saldo});
     });
 

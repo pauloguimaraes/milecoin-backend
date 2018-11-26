@@ -8,7 +8,7 @@
 import * as CryptoJS from 'crypto-js';
 import * as _ from 'lodash';
 import { broadcast_atualizacao, broadcast_pool } from './p2p';
-import { get_transacao_coinbase, is_endereco_valido, processa_transacoes, Transacao, CorposNaoProcessados } from './transaction';
+import { get_transacao_coinbase, is_endereco_valido, processa_transacoes, Transacao, CorposNaoProcessados, get_chave_publica } from './transaction';
 import { add_transacao_no_pool, get_pool_transacoes, atualiza_pool } from './transactionPool';
 import { hexadecimal_para_binario } from './util';
 import { cria_transacao, encontra_transacoes_nao_processadas, get_saldo, get_chave_privada_carteira, get_chave_publica_carteira } from './wallet';
@@ -238,8 +238,13 @@ const encontra_bloco = (indice: number, hash_anterior: string, timestamp: number
 /**
  * Recupera o saldo da carteira.
  */
-const get_saldo_carteira = (): number => {
-    return get_saldo(get_chave_publica_carteira(), get_corpos_nao_processados());
+const get_saldo_carteira = (chave_privada: string): number => {
+    if(chave_privada === null) {
+        return get_saldo(get_chave_publica_carteira(), get_corpos_nao_processados());
+    }
+    else {
+        return get_saldo(get_chave_publica(chave_privada), get_corpos_nao_processados());
+    }
 };
 
 
