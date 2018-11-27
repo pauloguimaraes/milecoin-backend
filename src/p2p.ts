@@ -47,7 +47,7 @@ class Mensagem {
  */
 
 
-const sockets: WebSocket[] = [];
+let sockets: WebSocket[] = [];
 
 
 
@@ -86,6 +86,10 @@ const get_sockets = () => {
  */
 const inicia_conexao = (ws: WebSocket) => {
     sockets.push(ws);
+
+    sockets = sockets.filter(function() {
+        return true;
+    });
     inicia_interpretador_mensagens(ws);
     inicia_interpretador_erros(ws);
 

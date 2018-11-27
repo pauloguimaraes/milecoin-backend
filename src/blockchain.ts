@@ -202,15 +202,26 @@ const gera_proximo_bloco = () => {
  * @param endereco_recebedor Endereço do recebedor
  * @param valor Valor da transação
  */
-const gera_proximo_bloco_com_transacao = (endereco_recebedor: string, valor: number) => {
+const gera_proximo_bloco_com_transacao = (assinatura: string, endereco_recebedor: string, valor: number) => {
     if (!is_endereco_valido(endereco_recebedor))
         throw Error('Endereço inválido');
     if (typeof valor !== 'number')
         throw Error('Valor inválido');
 
+    let ass: string = '';
+    let priv: string = '';
+    if(assinatura === null) {
+        ass = get_chave_publica_carteira();
+        priv = get_chave_privada_carteira();
+    } else {
+        ass = get_chave_publica(assinatura);
+        priv = assinatura;
+    }
+
+    console.log('passou');
     // Monta a transação
-    const tran_coinbase: Transacao = get_transacao_coinbase(get_chave_publica_carteira(), get_ultimo_bloco().indice + 1);
-    const tx: Transacao = cria_transacao(endereco_recebedor, valor, get_chave_privada_carteira(), get_corpos_nao_processados(), get_pool_transacoes());
+    const tran_coinbase: Transacao = get_transacao_coinbase(ass, get_ultimo_bloco().indice + 1);
+    const tx: Transacao = cria_transacao(endereco_recebedor, valor, priv, get_corpos_nao_processados(), get_pool_transacoes());
     const dados_do_bloco: Transacao[] = [tran_coinbase, tx];
     return gera_proximo_bloco_raw(dados_do_bloco);
 };

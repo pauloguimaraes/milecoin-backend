@@ -129,8 +129,10 @@ const inicia_servidor_http = (porta: number) => {
     app.post('/mineraTransacao', (req, res) => {
         const endereco = req.body.endereco;
         const valor = req.body.valor;
+        const assinatura = req.body.assinatura;
+
         try {
-            const resp = gera_proximo_bloco_com_transacao(endereco, valor);
+            const resp = gera_proximo_bloco_com_transacao(assinatura, endereco, valor);
             res.send(resp);
         } catch (e) {
             console.log(e.message);
